@@ -321,7 +321,7 @@ fn set_autostart(enabled: bool) -> Result<(), String> {
                         "/t",
                         "REG_SZ",
                         "/d",
-                        &format!("\"{}\"", exe_str),
+                        &format!("\"{}\" --tray", exe_str),
                         "/f",
                     ])
                     .output();
@@ -341,12 +341,30 @@ fn set_autostart(enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Show or hide the floating pill window (used by Ctrl+Alt+V hotkey and tray)
+fn toggle_pill_visibility(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+}
+
 /// Change the registered global shortcut
 #[tauri::command]
 fn register_shortcut(app: AppHandle, shortcut_str: String) -> Result<(), String> {
     if let Ok(shortcut) = shortcut_str.parse::<tauri_plugin_global_shortcut::Shortcut>() {
         let _ = app.global_shortcut().unregister_all();
-        app.global_shortcut().register(shortcut).map_err(|e| e.to_string())?;
+        app.global_shortcut()
+            .register(shortcut)
+            .map_err(|e| e.to_string())?;
+        // Keep the pill show/hide hotkey alive alongside the mic hotkey
+        if let Ok(vis) = "Control+Alt+KeyV".parse::<tauri_plugin_global_shortcut::Shortcut>() {
+            let _ = app.global_shortcut().register(vis);
+        }
         Ok(())
     } else {
         Err("Invalid shortcut string. Try e.g. 'Alt+KeyV' or 'Control+Shift+Space'".to_string())
@@ -469,10 +487,21 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        let _ = app.emit("toggle-listening", ());
+                .with_handler(|app, shortcut, event| {
+                    if event.state() != tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        return;
                     }
+                    // Ctrl+Alt+V: show / hide the pill on screen anytime
+                    if let Ok(vis) =
+                        "Control+Alt+KeyV".parse::<tauri_plugin_global_shortcut::Shortcut>()
+                    {
+                        if *shortcut == vis {
+                            toggle_pill_visibility(app);
+                            return;
+                        }
+                    }
+                    // Alt+V (or the user's remapped key): toggle voice typing
+                    let _ = app.emit("toggle-listening", ());
                 })
                 .build(),
         )
@@ -485,10 +514,21 @@ pub fn run() {
                     }
                 }
                 let _ = window.set_always_on_top(true);
+                // Tray-first app: no taskbar button, no Alt-Tab clutter
+                let _ = window.set_skip_taskbar(true);
+                // Auto-start on boot launches silently in the tray
+                if std::env::args().any(|arg| arg == "--tray") {
+                    let _ = window.hide();
+                }
             }
 
-            // Register global hotkey Alt+V
+            // Global hotkeys: Alt+V = mic toggle, Ctrl+Alt+V = show/hide pill
             if let Ok(shortcut) = "Alt+KeyV".parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                let _ = app.global_shortcut().register(shortcut);
+            }
+            if let Ok(shortcut) =
+                "Control+Alt+KeyV".parse::<tauri_plugin_global_shortcut::Shortcut>()
+            {
                 let _ = app.global_shortcut().register(shortcut);
             }
 
@@ -496,7 +536,7 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-            let show_i = MenuItem::with_id(app, "show_window", "Open VoiceFlow", true, None::<&str>)?;
+            let show_i = MenuItem::with_id(app, "show_window", "Show / Hide Pill (Ctrl+Alt+V)", true, None::<&str>)?;
             let toggle_i = MenuItem::with_id(app, "toggle_mic", "Toggle Mic (Alt+V)", true, None::<&str>)?;
             let sep1 = PredefinedMenuItem::separator(app)?;
             let mode_uni = MenuItem::with_id(app, "mode_unicode", "✔ Unicode Mode (Modern/Web)", true, None::<&str>)?;
@@ -532,10 +572,7 @@ pub fn run() {
                         let _ = app.emit("toggle-listening", ());
                     }
                     "show_window" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        toggle_pill_visibility(app);
                     }
                     "quit" => {
                         app.exit(0);
@@ -550,10 +587,7 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        toggle_pill_visibility(app);
                     }
                 });
 

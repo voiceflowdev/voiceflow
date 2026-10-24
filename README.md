@@ -61,6 +61,7 @@ and watch the text appear live — then land instantly in whatever app you're us
 ### 🪶 Light & Native
 - **Rust + Tauri v2** with native WebView2 — ~25–35 MB RAM, <0.5% idle CPU (no Electron bloat)
 - Frameless glassmorphism UI with **dark theme**, draggable & resizable anywhere on screen
+- **Tray-first**: no taskbar button, no Alt-Tab clutter — summon or hide the pill anytime with <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd>, and it starts silently in the tray on boot
 - System tray controls, start-on-boot, and **auto-update** straight from GitHub Releases
 
 ---
@@ -91,6 +92,7 @@ and watch the text appear live — then land instantly in whatever app you're us
 | Shortcut | Action |
 | :--- | :--- |
 | <kbd>Alt</kbd>+<kbd>V</kbd> | Toggle voice typing **globally** (works inside any app) — remappable in settings |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd> | Show / hide the floating pill anytime — the app lives quietly in the system tray |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Type the editor's text into the active app |
 | <kbd>Esc</kbd> | Collapse the panel back to the floating pill |
 
